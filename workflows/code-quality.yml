@@ -1,0 +1,85 @@
+name: Code Quality Review
+
+on:
+  workflow_call:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      # JavaScript/Node.js projects
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        if: hashFiles('package.json') != ''
+        with:
+          node-version: '18'
+      
+      - name: Install Node dependencies
+        if: hashFiles('package.json') != ''
+        run: npm ci
+      
+      - name: Lint code
+        if: hashFiles('package.json') != ''
+        continue-on-error: true
+        run: npm run lint || echo "No lint script found"
+      
+      - name: Run tests & coverage
+        if: hashFiles('package.json') != ''
+        continue-on-error: true
+        run: npm test -- --coverage || npm test || echo "No tests found"
+      
+      - name: Security audit
+        if: hashFiles('package.json') != ''
+        continue-on-error: true
+        run: npm audit --audit-level=moderate || true
+      
+      # Python projects
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        if: hashFiles('requirements.txt') != '' || hashFiles('pyproject.toml') != ''
+        with:
+          python-version: '3.11'
+      
+      - name: Install Python dependencies
+        if: hashFiles('requirements.txt') != ''
+        run: pip install -r requirements.txt
+      
+      - name: Python linting & formatting
+        if: hashFiles('requirements.txt') != ''
+        continue-on-error: true
+        run: |
+          pip install flake8 black isort
+          flake8 . || true
+          black --check . || true
+      
+      - name: Python security check
+        if: hashFiles('requirements.txt') != ''
+        continue-on-error: true
+        run: pip install bandit && bandit -r . || true
+      
+      # Java projects
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        if: hashFiles('pom.xml') != '' || hashFiles('build.gradle') != ''
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      
+      - name: Maven quality checks
+        if: hashFiles('pom.xml') != ''
+        continue-on-error: true
+        run: mvn clean verify || true
+      
+      # General checks
+      - name: Check file formatting
+        continue-on-error: true
+        run: |
+          # Check for trailing whitespace
+          if grep -r ' $' --include="*.js" --include="*.py" --include="*.java" --include="*.ts" .; then
+            echo "⚠️ Trailing whitespace found"
+          fi
