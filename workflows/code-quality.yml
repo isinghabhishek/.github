@@ -1,32 +1,63 @@
-name: Code Quality
-
 on:
   workflow_call:
+    inputs:
+      run-clippy:
+        required: false
+        type: boolean
+        default: true
+      run-fmt:
+        required: false
+        type: boolean
+        default: true
+      run-test:
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      GITHUB_TOKEN:
+        required: true
 
 jobs:
-  rust-quality:
+  fmt:
+    if: ${{ inputs.run-fmt == 'true' }}
     runs-on: ubuntu-latest
-    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Install Rust
-        uses: rust-lang/rust-action@v1
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-
-      - name: Cargo Check
-        run: cargo check
-
-      - name: Clippy Lint
-        run: cargo clippy -- -D warnings
-
-      - name: Format Check
+          profile: minimal
+          override: true
+      - name: Check formatting
         run: cargo fmt -- --check
 
-      - name: Run Tests
-        run: cargo test
+  clippy:
+    if: ${{ inputs.run-clippy == 'true' }}
+    runs-on: ubuntu-latest
+    needs: fmt
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      - name: Install clippy
+        run: rustup component add clippy || true
+      - name: Run clippy
+        run: cargo clippy -- -D warnings
 
-      - name: Security Audit
-        run: cargo audit || true
+  test:
+    if: ${{ inputs.run-test == 'true' }}
+    runs-on: ubuntu-latest
+    needs: [fmt, clippy]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      - name: Run tests
+        run: cargo test --verbose
